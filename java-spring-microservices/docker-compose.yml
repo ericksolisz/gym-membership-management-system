@@ -1,0 +1,120 @@
+name: gym-membership
+
+# One-command local backend stack. From this directory:
+#   docker compose up --build     # build every service image + start the stack
+#   docker compose up             # start again (no rebuild) after the first build
+#   docker compose down           # stop the stack (keeps the seeded databases)
+#   docker compose down -v        # stop AND wipe the databases (forces a fresh reseed)
+#
+# Only the API gateway is published to the host (:4004) — the SPA and curl talk
+# to everything through it, mirroring the real architecture.
+
+services:
+  member-service-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: admin_user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: member-service-db
+    volumes:
+      - member-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin_user -d member-service-db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  auth-service-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: admin_user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: auth-service-db
+    volumes:
+      - auth-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin_user -d auth-service-db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  kafka:
+    image: apache/kafka:latest
+    environment:
+      KAFKA_NODE_ID: "1"
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:9094
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,EXTERNAL://localhost:9094
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
+      CLUSTER_ID: "MkU3OEVBNTcwNTJENDM2Qk"
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+
+  auth-service:
+    build: ./auth-service
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://auth-service-db:5432/auth-service-db
+      SPRING_DATASOURCE_USERNAME: admin_user
+      SPRING_DATASOURCE_PASSWORD: password
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      SPRING_SQL_INIT_MODE: always
+      # Throwaway local secret. Any base64 string decoding to >=32 bytes works
+      # (sign + validate both live in auth-service). Override via a .env file:
+      #   JWT_SECRET=$(openssl rand -base64 48)
+      JWT_SECRET: ${JWT_SECRET:-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA}
+    depends_on:
+      auth-service-db:
+        condition: service_healthy
+
+  billing-service:
+    build: ./billing-service
+
+  member-service:
+    build: ./member-service
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://member-service-db:5432/member-service-db
+      SPRING_DATASOURCE_USERNAME: admin_user
+      SPRING_DATASOURCE_PASSWORD: password
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      SPRING_SQL_INIT_MODE: always
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      BILLING_SERVICE_ADDRESS: billing-service
+      BILLING_SERVICE_GRPC_PORT: "9001"
+    depends_on:
+      member-service-db:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      billing-service:
+        condition: service_started
+
+  analytics-service:
+    build: ./analytics-service
+    environment:
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    depends_on:
+      kafka:
+        condition: service_healthy
+
+  api-gateway:
+    build: ./api-gateway
+    environment:
+      AUTH_SERVICE_URL: http://auth-service:4005
+    ports:
+      - "4004:4004"
+    depends_on:
+      auth-service:
+        condition: service_started
+      member-service:
+        condition: service_started
+
+volumes:
+  member-db-data:
+  auth-db-data:

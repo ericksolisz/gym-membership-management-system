@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package member.events;
+option java_multiple_files = true;
+
+message MemberEvent {
+  string memberId = 1;
+  string name = 2;
+  string email = 3;
+  string event_type = 4;
+  string membership_plan = 5;
+  string membership_status = 6;
+}

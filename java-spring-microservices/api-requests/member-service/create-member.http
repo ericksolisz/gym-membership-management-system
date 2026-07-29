@@ -1,0 +1,15 @@
+### Creates a new member entity
+POST http://lb-7e648e08.elb.localhost.localstack.cloud:4004/api/members
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "name": "Sam Carter",
+  "email": "sam.carter@example.com",
+  "address": "123 Main Street",
+  "dateOfBirth": "1995-09-09",
+  "joinedDate": "2026-07-18",
+  "membershipPlan": "PREMIUM"
+}
+
+###

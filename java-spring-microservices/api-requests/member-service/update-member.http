@@ -1,0 +1,14 @@
+### Updates an existing member entity
+PUT http://localhost:4000/members/123e4567-e89b-12d3-a456-426614174000
+Content-Type: application/json
+
+{
+  "name": "Alex Rivera",
+  "email": "alex.rivera@example.com",
+  "address": "123 Main Street",
+  "dateOfBirth": "1988-06-15",
+  "membershipPlan": "VIP",
+  "membershipStatus": "PAUSED"
+}
+
+###

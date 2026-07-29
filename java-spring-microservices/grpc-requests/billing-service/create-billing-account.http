@@ -1,0 +1,8 @@
+GRPC localhost:9001/BillingService/CreateBillingAccount
+
+{
+  "memberId": "12333",
+  "name" : "Sam Carter",
+  "email" : "sam.carter@example.com",
+  "membershipPlan": "PREMIUM"
+}

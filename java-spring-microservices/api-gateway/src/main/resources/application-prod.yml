@@ -1,0 +1,46 @@
+server:
+  port: 4004 # Gateway listens on port 4004
+
+spring:
+  cloud:
+    gateway:
+      globalcors:
+        add-to-simple-url-handler-mapping: true
+        cors-configurations:
+          '[/**]':
+            allowedOrigins:
+              - "http://localhost:5173"
+            allowedMethods: [GET, POST, PUT, DELETE, OPTIONS]
+            allowedHeaders: "*"
+            allowCredentials: false
+      routes:
+        - id: auth-service-route
+          uri: http://host.docker.internal:4005
+          predicates:
+            - Path=/auth/**
+          filters:
+            - StripPrefix=1
+
+        # Route for /api/members/** to member-service
+        - id: member-service-route
+          uri: http://host.docker.internal:4000
+          predicates:
+            - Path=/api/members/**
+          filters:
+            - StripPrefix=1
+            - JwtValidation
+
+        # Route for /api/docs/members to member-service /v3/api-docs
+        - id: api-docs-member-route
+          uri: http://host.docker.internal:4000
+          predicates:
+            - Path=/api-docs/members
+          filters:
+            - RewritePath=/api-docs/members,/v3/api-docs
+
+        - id: api-docs-auth-route
+          uri: http://host.docker.internal:4005
+          predicates:
+            - Path=/api-docs/auth
+          filters:
+            - RewritePath=/api-docs/auth,/v3/api-docs
